@@ -1,8 +1,11 @@
 //  Library
-pub mod access_token;
-pub mod add;
 pub mod default_headers;
+
+pub mod access_token;
 pub mod request_token;
+
+pub mod add;
+pub mod retrieve;
 
 pub struct Pocket {
     client: reqwest::Client,
