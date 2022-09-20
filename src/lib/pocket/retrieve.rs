@@ -2,45 +2,22 @@
 use super::Pocket;
 use crate::lib::endpoint;
 use serde::{Deserialize, Serialize};
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct RetrieveOptions {
-    state: String,
-    favorite: Option<u8>,
-    count: Option<u32>,
-}
-
-impl Default for RetrieveOptions {
-    fn default() -> Self {
-        Self {
-            state: String::from("all"),
-            favorite: Some(0),
-            count: Some(3),
-        }
-    }
-}
-
-impl RetrieveOptions {
-    pub fn new() -> Self {
-        Self {
-            ..Default::default()
-        }
-    }
-}
+use std::collections::HashMap;
 
 impl Pocket {
-    pub async fn retrieve(
-        &self,
-        options: Option<RetrieveOptions>,
-    ) -> Result<String, reqwest::Error> {
+    pub async fn retrieve(&self, options: Options) -> Result<RetrieveResponse, reqwest::Error> {
         let consumer_key = self.consumer_key.to_owned();
         let access_token = self
             .access_token
             .as_ref()
-            .expect("need access_token")
+            .expect("A valid access_token is required to interact with the API")
             .to_owned();
 
-        let payload = RetrieveDetails::new(consumer_key, access_token);
+        let payload = Options {
+            consumer_key: Some(consumer_key),
+            access_token: Some(access_token),
+            ..options
+        };
 
         Ok(self
             .client
@@ -48,47 +25,160 @@ impl Pocket {
             .json(&payload)
             .send()
             .await?
-            .json()
-            // .json::<RetrieveResponse>()
+            // .text()
+            .json::<RetrieveResponse>()
             .await?)
     }
 }
 
-#[derive(Default, Serialize, Deserialize)]
-pub struct RetrieveDetails {
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct Options {
+    /// Retrieve unread, archive or all items
+    state: Option<State>,
+    /// Retrieve favorite if 1 else return non-favorite if 0
+    favorite: Option<Favorite>,
+    /// Returns items with the given tag-name. Return all untagged items if __untagged__
+    tag: Option<String>,
+    /// Return only article, video or images
+    content_type: Option<ContentType>,
+    /// Sort the results
+    sort: Option<Sort>,
+    /// Specify how much detail must be returned about the retrieved item
+    detail_type: Option<DetailType>,
+    /// Only return items whose title or url contains the search string
+    search: Option<String>,
+    /// Only return items from a particular domain
+    domain: Option<String>,
+    /// Only return items modified since the given unix timestamp
+    since: Option<u32>,
+    /// Only return count number of items
     count: Option<u32>,
-    consumer_key: String,
-    access_token: String,
+    /// Only used with count; start returning from offset position of results
+    offset: Option<u32>,
+    /// Application consumer_key
+    consumer_key: Option<String>,
+    /// User access_token
+    access_token: Option<String>,
 }
 
-impl RetrieveDetails {
-    pub fn new(consumer_key: String, access_token: String) -> Self {
-        return RetrieveDetails {
-            consumer_key,
-            access_token,
+#[derive(Debug, Serialize, Deserialize)]
+pub enum State {
+    Unread,
+    Archive,
+    All,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub enum Favorite {
+    No = 0,
+    Yes = 1,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub enum ContentType {
+    Article,
+    Video,
+    Image,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub enum Sort {
+    Newest,
+    Oldest,
+    Title,
+    Site,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub enum DetailType {
+    Simple,
+    Complete,
+}
+
+impl Options {
+    pub fn new() -> Self {
+        Self {
             ..Default::default()
-        };
+        }
     }
 
-    pub fn build(&self, opts: Option<RetrieveOptions>) {}
+    pub fn state(&mut self, state: State) -> &mut Self {
+        self.state = Some(state);
+        return self;
+    }
+
+    pub fn favorite(&mut self, favorite: bool) -> &mut Self {
+        let favorite = if favorite {
+            Favorite::Yes
+        } else {
+            Favorite::No
+        };
+        self.favorite = Some(favorite);
+        return self;
+    }
+
+    pub fn tag(&mut self, tag: String) -> &mut Self {
+        self.tag = Some(tag);
+        return self;
+    }
+
+    pub fn content_type(&mut self, content_type: ContentType) -> &mut Self {
+        self.content_type = Some(content_type);
+        return self;
+    }
+
+    pub fn sort(&mut self, sort: Sort) -> &mut Self {
+        self.sort = Some(sort);
+        return self;
+    }
+
+    pub fn detail_type(&mut self, detail_type: DetailType) -> &mut Self {
+        self.detail_type = Some(detail_type);
+        return self;
+    }
+
+    pub fn search(&mut self, search: String) -> &mut Self {
+        self.search = Some(search);
+        return self;
+    }
+
+    pub fn domain(&mut self, domain: String) -> &mut Self {
+        self.domain = Some(domain);
+        return self;
+    }
+
+    pub fn since(&mut self, since: u32) -> &mut Self {
+        self.since = Some(since);
+        return self;
+    }
+
+    pub fn count(&mut self, count: u32) -> &mut Self {
+        self.count = Some(count);
+        return self;
+    }
+
+    pub fn offset(&mut self, offset: u32) -> &mut Self {
+        self.offset = Some(offset);
+        return self;
+    }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct RetrieveResponse {
     status: u8,
     complete: u8,
     since: u32,
-    error: String,
+    error: Option<String>,
     search_meta: SearchMeta,
-    list: Vec<RetrieveItem>,
+    list: HashMap<String, RetrieveItem>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 struct SearchMeta {
     search_type: String,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 struct RetrieveItem {
     /// A unique identifier matching the saved item. This id must be used to perform any actions through the v3/modify endpoint.
     item_id: String,
@@ -117,13 +207,13 @@ struct RetrieveItem {
     /// How many words are in the article
     word_count: String,
     /// A JSON object of the user tags associated with the item
-    tags: String,
+    tags: Option<String>,
     /// A JSON object listing all of the authors associated with the item
-    authors: String,
+    authors: Option<String>,
     /// A JSON object listing all of the images associated with the item
-    images: String,
+    images: Option<String>,
     /// A JSON object listing all of the videos associated with the item
-    videos: String,
+    videos: Option<String>,
     /// Timestamp of when the resource was added
     time_added: String,
     /// Timestamp of when the resource was last updated
@@ -133,14 +223,14 @@ struct RetrieveItem {
     /// Timestamp of when the resource was favorited
     time_favorited: String,
     /// Sorting ID number
-    sort_id: i32,
+    sort_id: u32,
     is_index: String,
     /// Language
     lang: String,
     /// Estimated listening time in seconds
     listen_duration_estimate: u32,
     /// Estimated reading time in seconds
-    time_to_read: u32,
+    time_to_read: Option<u32>,
     /// Image URL
-    top_image_url: String,
+    top_image_url: Option<String>,
 }
