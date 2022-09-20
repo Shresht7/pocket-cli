@@ -1,5 +1,6 @@
 //  Library
 pub mod lib;
+
 use lib::pocket::{add::AddOptions, Pocket};
 
 use dotenv;

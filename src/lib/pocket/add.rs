@@ -3,47 +3,62 @@ use super::Pocket;
 use crate::lib::endpoint;
 use serde::{Deserialize, Serialize};
 
+#[derive(Default, Serialize, Deserialize)]
+pub struct AddOptions {
+    pub url: String,
+    pub title: Option<String>,
+    pub tags: Option<String>,
+    pub tweet_id: Option<String>,
+}
+
+impl AddOptions {
+    pub fn new(url: &str) -> Self {
+        Self {
+            url: String::from(url),
+            ..Default::default()
+        }
+    }
+    pub fn set_title(&mut self, title: String) -> &mut Self {
+        self.title = Some(title);
+        return self;
+    }
+    pub fn set_tags(&mut self, tags: String) -> &mut Self {
+        self.tags = Some(tags);
+        return self;
+    }
+    pub fn set_tweet_id(&mut self, tweet_id: String) -> &mut Self {
+        self.tweet_id = Some(tweet_id);
+        return self;
+    }
+}
+
 impl Pocket {
+    /// Save an item to the user's Pocket list
     pub async fn add(&self, options: AddOptions) -> Result<AddResponse, reqwest::Error> {
         let consumer_key = self.consumer_key.clone();
         let access_token = self
             .access_token
             .as_ref()
-            .expect("need access_token")
+            .expect("A valid access_token is required for this operation")
             .to_owned();
+
+        let payload = &AddPayload {
+            url: String::from(options.url),
+            title: options.title,
+            tags: options.tags,
+            tweet_id: options.tweet_id,
+            consumer_key,
+            access_token,
+        };
 
         Ok(self
             .client
             .post(endpoint::ADD)
-            .json(&AddPayload {
-                url: String::from(options.url),
-                title: options.title,
-                tags: options.tags,
-                tweet_id: options.tweet_id,
-                consumer_key,
-                access_token,
-            })
+            .json(payload)
             .send()
             .await?
             .json::<AddResponse>()
             .await?)
-    }
-}
-
-#[derive(Default, Serialize, Deserialize)]
-pub struct AddOptions {
-    url: String,
-    title: Option<String>,
-    tags: Option<String>,
-    tweet_id: Option<String>,
-}
-
-impl AddOptions {
-    pub fn new(url: &str) -> Self {
-        return Self {
-            url: String::from(url),
-            ..Default::default()
-        };
     }
 }
 
@@ -106,7 +121,30 @@ struct AddItem {
     /// Array of author data (if author(s) were found)
     authors: Vec<String>,
     /// Array of image data (if image(s) were found)
-    images: Vec<String>,
+    images: Vec<ImageData>,
     /// Array of video data (if video(s) were found)
     videos: Vec<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct ImageData {
+    item_id: String,
+    image_id: String,
+    src: String,
+    width: u16,  //  String
+    height: u16, // String
+    caption: String,
+    credit: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct VideoData {
+    item_id: String,
+    video_id: String,
+    src: String,
+    width: u16,            //  String
+    height: u16,           //  String
+    length: Option<usize>, //  String
+    vid: String,
+    vtype: u16,
 }

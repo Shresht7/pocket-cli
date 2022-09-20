@@ -13,15 +13,18 @@ pub struct Pocket {
 }
 
 impl Pocket {
+    /// Create a new Pocket Client
     pub fn new(consumer_key: &str) -> Self {
+        //  Get default headers to use in every request
         let headers = default_headers::get();
 
+        //  Build the reqwest client
         let client = reqwest::ClientBuilder::new()
             .default_headers(headers)
             .build()
             .unwrap();
 
-        return Pocket {
+        return Self {
             client,
             consumer_key: String::from(consumer_key),
             request_token: None,
