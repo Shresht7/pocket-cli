@@ -1,6 +1,6 @@
 //  Library
 pub mod lib;
-use lib::pocket::Pocket;
+use lib::pocket::{add::AddOptions, Pocket};
 
 use dotenv;
 
@@ -15,8 +15,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     client.set_request_token(request_token);
     client.set_access_token(access_token);
 
-    let request_token = client.get_request_token().await?;
-    println!("{}", request_token);
+    let response = client.add(AddOptions::new("https://example.com")).await?;
+
+    println!("{:?}", response);
 
     Ok(())
 }
